@@ -4,11 +4,17 @@ version = "0.0.0"
 edition = "2024"
 
 [dependencies]
-opentelemetry = { version = "0.31" }
-opentelemetry-appender-tracing = { version =  "0.31" }
-opentelemetry-otlp = { version = "0.31" }
-opentelemetry-semantic-conventions = { version = "0.31" }
-opentelemetry_sdk = { version = "0.31" }
 tracing = { version = "0.1" }
 tracing-opentelemetry = { version = "0.32" }
 tracing-subscriber = { version =  "0.3", features = ["json", "env-filter"] }
+
+# Otel
+opentelemetry = { version = "0.31", optional = true }
+opentelemetry-appender-tracing = { version =  "0.31", optional = true }
+opentelemetry-otlp = { version = "0.31", optional = true }
+opentelemetry-semantic-conventions = { version = "0.31", optional = true }
+opentelemetry_sdk = { version = "0.31", optional = true }
+
+[features]
+default = ["otel"]
+otel = ["dep:opentelemetry", "dep:opentelemetry", "dep:opentelemetry-appender-tracing", "dep:opentelemetry-otlp", "dep:opentelemetry-semantic-conventions", "dep:opentelemetry_sdk"]

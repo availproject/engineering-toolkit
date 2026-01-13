@@ -1,43 +1,75 @@
 use std::error::Error;
 use std::fs::File;
 
-pub use opentelemetry;
+#[cfg(feature = "otel")]
 use opentelemetry::trace::TracerProvider;
+#[cfg(feature = "otel")]
 use opentelemetry_otlp::WithExportConfig;
+#[cfg(feature = "otel")]
 use opentelemetry_sdk::logs::SdkLoggerProvider;
+#[cfg(feature = "otel")]
 use opentelemetry_sdk::metrics::SdkMeterProvider;
+#[cfg(feature = "otel")]
 use opentelemetry_sdk::propagation::TraceContextPropagator;
+#[cfg(feature = "otel")]
 use opentelemetry_sdk::trace::SdkTracerProvider;
-pub use tracing;
+
 pub use tracing::{
     debug, debug_span, error, error_span, info, info_span, trace, trace_span, warn, warn_span,
 };
-pub use tracing_subscriber;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
+pub mod ext {
+    #[cfg(feature = "otel")]
+    pub use opentelemetry;
+    #[cfg(feature = "otel")]
+    pub use opentelemetry_appender_tracing;
+    #[cfg(feature = "otel")]
+    pub use opentelemetry_otlp;
+    #[cfg(feature = "otel")]
+    pub use opentelemetry_sdk;
+    #[cfg(feature = "otel")]
+    pub use opentelemetry_semantic_conventions;
+
+    pub use tracing;
+    pub use tracing_subscriber;
+}
+
 #[derive(Default)]
 pub struct TracingGuards {
+    #[cfg(feature = "otel")]
     otel_tracer: Option<SdkTracerProvider>,
+    #[cfg(feature = "otel")]
     otel_meter: Option<SdkMeterProvider>,
+    #[cfg(feature = "otel")]
     otel_logger: Option<SdkLoggerProvider>,
 }
 
 impl Drop for TracingGuards {
     fn drop(&mut self) {
-        if let Some(tracer) = &self.otel_tracer {
-            _ = tracer.shutdown();
-        }
-        if let Some(meter) = &self.otel_meter {
-            _ = meter.shutdown();
-        }
-        if let Some(logger) = &self.otel_logger {
-            _ = logger.shutdown();
+        #[cfg(feature = "otel")]
+        {
+            use std::time::Duration;
+
+            if let Some(tracer) = &self.otel_tracer {
+                _ = tracer.force_flush();
+                _ = tracer.shutdown_with_timeout(Duration::from_millis(100));
+            }
+            if let Some(meter) = &self.otel_meter {
+                _ = meter.force_flush();
+                _ = meter.shutdown_with_timeout(Duration::from_millis(100));
+            }
+            if let Some(logger) = &self.otel_logger {
+                _ = logger.force_flush();
+                _ = logger.shutdown_with_timeout(Duration::from_millis(100));
+            }
         }
     }
 }
 
+#[cfg(feature = "otel")]
 pub struct TracingOtelParams {
     pub endpoint_traces: Option<String>,
     pub endpoint_metrics: Option<String>,
@@ -51,6 +83,7 @@ pub struct TracingBuilder {
     json: Option<bool>,
     stdout: Option<bool>,
     file: Option<String>,
+    #[cfg(feature = "otel")]
     otel: Option<TracingOtelParams>,
 }
 
@@ -81,14 +114,31 @@ impl TracingBuilder {
         self
     }
 
+    #[cfg(feature = "otel")]
     pub fn with_otel(mut self, otel: TracingOtelParams) -> Self {
         self.otel = Some(otel);
         self
     }
 
-    /// directory: "./logs",  file_name: "./log.txt"
     pub fn with_default_file(mut self) -> Self {
         self.file = Some("./log.txt".to_owned());
+        self
+    }
+
+    pub fn with_rust_log(self, value: &str) -> Self {
+        unsafe {
+            std::env::set_var("RUST_LOG", value);
+        }
+
+        self
+    }
+
+    /// in ms
+    #[cfg(feature = "otel")]
+    pub fn with_otel_metric_export_interval(self, value: &str) -> Self {
+        unsafe {
+            std::env::set_var("OTEL_METRIC_EXPORT_INTERVAL", value);
+        }
         self
     }
 
@@ -120,6 +170,7 @@ impl TracingBuilder {
             }
         }
 
+        #[cfg(feature = "otel")]
         if let Some(otel_params) = self.otel {
             use opentelemetry_semantic_conventions::resource::{SERVICE_NAME, SERVICE_VERSION};
             opentelemetry::global::set_text_map_propagator(TraceContextPropagator::new());
@@ -189,13 +240,19 @@ impl TracingBuilder {
             .with(EnvFilter::from_default_env())
             .with(layers)
             .try_init()?;
+
         Ok(guard)
     }
 }
 
+#[cfg(feature = "otel")]
+pub fn otel_meter(service_name: &'static str) -> opentelemetry::metrics::Meter {
+    opentelemetry::global::meter(service_name)
+}
+
 #[cfg(test)]
 pub mod test {
-    use crate::{TracingBuilder, debug, error, info, trace, warn};
+    use crate::{TracingBuilder, debug, error, info, otel_meter, trace, warn};
     use std::{thread::sleep, time::Duration};
 
     #[test]
@@ -229,7 +286,7 @@ pub mod test {
             tracing::info!("inside span");
         }
 
-        let meter = opentelemetry::global::meter("markos-service");
+        let meter = otel_meter("markos-service");
         let c = meter.u64_counter("Example").build();
         c.add(
             1,
