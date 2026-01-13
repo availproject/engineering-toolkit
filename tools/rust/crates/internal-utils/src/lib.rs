@@ -304,4 +304,41 @@ pub mod test {
         );
         sleep(Duration::from_secs(60));
     }
+
+    #[test]
+    pub fn use_external_metrics() {
+        unsafe {
+            std::env::set_var("RUST_LOG", "info");
+            std::env::set_var("OTEL_METRIC_EXPORT_INTERVAL", "10000");
+        }
+
+        let _guards = TracingBuilder::new()
+            .with_default_file()
+            .with_json(false)
+            .with_otel(crate::TracingOtelParams {
+                endpoint_traces: Some("http://localhost:4318/v1/traces".into()),
+                endpoint_metrics: Some("http://localhost:4318/v1/metrics".into()),
+                endpoint_logs: Some("http://localhost:4318/v1/logs".into()),
+                service_name: "markos-service".into(),
+                service_version: "0.12.0".into(),
+            })
+            .try_init()
+            .unwrap();
+
+        let meter = otel_meter("markos-service");
+        let _c = meter
+            .u64_observable_counter("NotExample")
+            .with_callback(|x| {
+                // This would be an external metrics stored somewhere in our codebase.
+                x.observe(
+                    1,
+                    &[
+                        opentelemetry::KeyValue::new("name", "apple"),
+                        opentelemetry::KeyValue::new("color", "green"),
+                    ],
+                )
+            })
+            .build();
+        sleep(Duration::from_secs(60));
+    }
 }
