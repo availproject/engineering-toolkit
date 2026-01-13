@@ -1,0 +1,13 @@
+[package]
+name = "internal-utils"
+version = "0.0.0"
+edition = "2024"
+
+[dependencies]
+opentelemetry = { version = "0.31" }
+opentelemetry-otlp = { version = "0.31" }
+opentelemetry-semantic-conventions = { version = "0.31" }
+opentelemetry_sdk = { version = "0.31" }
+tracing = { version = "0.1" }
+tracing-opentelemetry = { version = "0.32" }
+tracing-subscriber = { version =  "0.3", features = ["json", "env-filter"] }
