@@ -1,6 +1,7 @@
 Structure:
 - Docs
     - Github Project Management
+    - Otel Explained
     - Tracing Explained
 - Tools
     - Rust
@@ -9,4 +10,3 @@ Structure:
         - Internal Utils - TODO
 - Scripts
     - TODO
-    
