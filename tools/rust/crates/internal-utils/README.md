@@ -1,4 +1,15 @@
+## For OTEL
+Run SigNoz
 
+```bash
+git clone https://github.com/SigNoz/signoz.git
+cd signoz/deploy/docker/clickhouse-setup
+docker compose up -d
+# Open http://localhost:8080/
+```
+
+
+## Notes
 TODOs
 - Implement non-blocking tracing with tracing-appender
 
