@@ -118,6 +118,12 @@ Guideline:
 - Aim for PRs that can be reviewed in **~15–30 minutes**.
 - If larger, explain why and provide a review guide.
 
+### 5.4 PR Documentation
+Guideline:
+- Interface and code changes should be reflected in existing documentation
+- If there is no documentation present, write one `¯\_(ツ)_/¯`
+
+
 ---
 
 ## 6) Code Review Standards

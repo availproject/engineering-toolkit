@@ -15,7 +15,8 @@ use opentelemetry_sdk::propagation::TraceContextPropagator;
 use opentelemetry_sdk::trace::SdkTracerProvider;
 
 pub use tracing::{
-    debug, debug_span, error, error_span, info, info_span, trace, trace_span, warn, warn_span,
+    debug, debug_span, error, error_span, event, info, info_span, trace, trace_span, warn,
+    warn_span,
 };
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::layer::SubscriberExt;
@@ -340,5 +341,19 @@ pub mod test {
             })
             .build();
         sleep(Duration::from_secs(60));
+    }
+
+    #[test]
+    pub fn test_basic_logging() {
+        let _guards = TracingBuilder::new()
+            .with_rust_log("info")
+            .with_json(true)
+            .try_init()
+            .unwrap();
+
+        let reason = "No Reason";
+        let code = "200";
+        tracing::event!(target: "my-service", tracing::Level::INFO, reason, code_debug = ?code, code_display = %code, "HTTP Fetch Failed");
+        tracing::info!(target: "my-service", reason, code_debug = ?code, code_display = %code, "HTTP Fetch Failed");
     }
 }

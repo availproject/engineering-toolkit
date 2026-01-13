@@ -8,6 +8,10 @@ docker compose up -d
 # Open http://localhost:8080/
 ```
 
+To stop all containers
+```bash
+docker rm -f $(docker ps -aq)
+```
 
 ## Notes
 TODOs
