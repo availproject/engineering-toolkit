@@ -23,3 +23,5 @@
 - [ES.26: Don’t use a variable for two unrelated purposes](https://isocpp.github.io/CppCoreGuidelines/CppCoreGuidelines#es26-dont-use-a-variable-for-two-unrelated-purposes)
 - [ES.45: Avoid “magic constants”; use symbolic constants](https://isocpp.github.io/CppCoreGuidelines/CppCoreGuidelines#es45-avoid-magic-constants-use-symbolic-constants)
 - [ES.76: Avoid goto](https://isocpp.github.io/CppCoreGuidelines/CppCoreGuidelines#es76-avoid-goto)
+- [Performance](https://isocpp.github.io/CppCoreGuidelines/CppCoreGuidelines#per-performance)
+    - Basically this whole section is relevant. It's short so please read it all.
