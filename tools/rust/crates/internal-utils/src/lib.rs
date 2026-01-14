@@ -1,5 +1,12 @@
 use std::error::Error;
 use std::fs::File;
+pub use tracing::{
+    debug, debug_span, error, error_span, event, info, info_span, trace, trace_span, warn,
+    warn_span,
+};
+use tracing_subscriber::EnvFilter;
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
 
 #[cfg(feature = "otel")]
 use opentelemetry::trace::TracerProvider;
@@ -14,14 +21,6 @@ use opentelemetry_sdk::propagation::TraceContextPropagator;
 #[cfg(feature = "otel")]
 use opentelemetry_sdk::trace::SdkTracerProvider;
 
-pub use tracing::{
-    debug, debug_span, error, error_span, event, info, info_span, trace, trace_span, warn,
-    warn_span,
-};
-use tracing_subscriber::EnvFilter;
-use tracing_subscriber::layer::SubscriberExt;
-use tracing_subscriber::util::SubscriberInitExt;
-
 pub mod ext {
     #[cfg(feature = "otel")]
     pub use opentelemetry;
@@ -33,6 +32,9 @@ pub mod ext {
     pub use opentelemetry_sdk;
     #[cfg(feature = "otel")]
     pub use opentelemetry_semantic_conventions;
+
+    #[cfg(feature = "db")]
+    pub use sqlx;
 
     pub use tracing;
     pub use tracing_subscriber;
@@ -251,6 +253,23 @@ pub fn otel_meter(service_name: &'static str) -> opentelemetry::metrics::Meter {
     opentelemetry::global::meter(service_name)
 }
 
+#[cfg(feature = "db")]
+pub struct Db;
+
+#[cfg(feature = "db")]
+impl Db {
+    /// max_connections if None defaults to 5
+    pub async fn initialize(
+        url: &str,
+        max_connections: Option<u32>,
+    ) -> Result<sqlx::Pool<sqlx::Postgres>, sqlx::Error> {
+        sqlx::postgres::PgPoolOptions::new()
+            .max_connections(max_connections.unwrap_or(5))
+            .connect(url)
+            .await
+    }
+}
+
 #[cfg(test)]
 pub mod test {
     use crate::{TracingBuilder, debug, error, info, otel_meter, trace, warn};
@@ -258,14 +277,11 @@ pub mod test {
 
     #[test]
     pub fn tracing_works() {
-        unsafe {
-            std::env::set_var("RUST_LOG", "info");
-            std::env::set_var("OTEL_METRIC_EXPORT_INTERVAL", "10000");
-        }
-
         let _guards = TracingBuilder::new()
             .with_default_file()
             .with_json(false)
+            .with_rust_log("info")
+            .with_otel_metric_export_interval("10000")
             .with_otel(crate::TracingOtelParams {
                 endpoint_traces: Some("http://localhost:4318/v1/traces".into()),
                 endpoint_metrics: Some("http://localhost:4318/v1/metrics".into()),
@@ -308,14 +324,11 @@ pub mod test {
 
     #[test]
     pub fn use_external_metrics() {
-        unsafe {
-            std::env::set_var("RUST_LOG", "info");
-            std::env::set_var("OTEL_METRIC_EXPORT_INTERVAL", "10000");
-        }
-
         let _guards = TracingBuilder::new()
             .with_default_file()
             .with_json(false)
+            .with_rust_log("info")
+            .with_otel_metric_export_interval("10000")
             .with_otel(crate::TracingOtelParams {
                 endpoint_traces: Some("http://localhost:4318/v1/traces".into()),
                 endpoint_metrics: Some("http://localhost:4318/v1/metrics".into()),

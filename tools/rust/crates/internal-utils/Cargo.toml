@@ -15,6 +15,10 @@ opentelemetry-otlp = { version = "0.31", optional = true }
 opentelemetry-semantic-conventions = { version = "0.31", optional = true }
 opentelemetry_sdk = { version = "0.31", optional = true }
 
+# DB
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "tls-native-tls", "postgres", "chrono"], optional = true } 
+
 [features]
-default = ["otel"]
+default = ["otel", "db"]
 otel = ["dep:opentelemetry", "dep:opentelemetry", "dep:opentelemetry-appender-tracing", "dep:opentelemetry-otlp", "dep:opentelemetry-semantic-conventions", "dep:opentelemetry_sdk"]
+db = ["dep:sqlx"]
