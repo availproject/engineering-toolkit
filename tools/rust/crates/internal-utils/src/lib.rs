@@ -86,6 +86,7 @@ pub struct TracingBuilder {
     json: Option<bool>,
     stdout: Option<bool>,
     file: Option<String>,
+    env_filter: Option<EnvFilter>,
     #[cfg(feature = "otel")]
     otel: Option<TracingOtelParams>,
 }
@@ -104,6 +105,11 @@ impl TracingBuilder {
 
     pub fn with_stdout(mut self, value: bool) -> Self {
         self.json = Some(value);
+        self
+    }
+
+    pub fn with_env_filter(mut self, value: EnvFilter) -> Self {
+        self.env_filter = Some(value);
         self
     }
 
@@ -240,7 +246,10 @@ impl TracingBuilder {
         }
 
         tracing_subscriber::registry()
-            .with(EnvFilter::from_default_env())
+            .with(
+                self.env_filter
+                    .unwrap_or_else(|| EnvFilter::from_default_env()),
+            )
             .with(layers)
             .try_init()?;
 
