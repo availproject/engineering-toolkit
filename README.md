@@ -3,6 +3,10 @@ Structure:
     - Github Project Management
     - Otel Explained
     - Tracing Explained
+    - Code Guidelines
+    - Patterns
+        - Embedded DSL Pattern
+
 - Tools
     - Rust
         - Internal Utils - Tracing/Logging
