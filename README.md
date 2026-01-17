@@ -3,6 +3,7 @@ Structure:
     - Github Project Management
     - Otel Explained
     - Tracing Explained
+    - Tracing Conventions
     - Code Guidelines
     - Patterns
         - Embedded DSL Pattern
