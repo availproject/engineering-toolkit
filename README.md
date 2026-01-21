@@ -1,1 +1,3 @@
-TODO
+```
+git submodule update --recursive
+```
