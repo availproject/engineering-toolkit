@@ -53,3 +53,20 @@ cd signoz/deploy/docker/clickhouse-setup
 docker compose up -d
 # Open http://localhost:8080/
 ```
+Structure:
+- Docs
+    - Github Project Management
+    - Otel Explained
+    - Tracing Explained
+    - Tracing Conventions
+    - Code Guidelines
+    - Patterns
+        - Embedded DSL Pattern
+
+- Tools
+    - Rust
+        - Internal Utils - Tracing/Logging
+    - JS
+        - Internal Utils - TODO
+- Scripts
+    - TODO
