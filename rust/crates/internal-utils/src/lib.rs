@@ -108,18 +108,18 @@ impl TracingBuilder {
         self
     }
 
-    pub fn with_env_filter(mut self, value: EnvFilter) -> Self {
-        self.env_filter = Some(value);
+    pub fn with_env_filter(mut self, value: Option<EnvFilter>) -> Self {
+        self.env_filter = value;
         self
     }
 
-    pub fn with_json(mut self, value: bool) -> Self {
-        self.json = Some(value);
+    pub fn with_json(mut self, value: Option<bool>) -> Self {
+        self.json = value;
         self
     }
 
-    pub fn with_file(mut self, path: impl Into<String>) -> Self {
-        self.file = Some(path.into());
+    pub fn with_file(mut self, path: Option<String>) -> Self {
+        self.file = path;
         self
     }
 
@@ -288,7 +288,7 @@ pub mod test {
     pub fn tracing_works() {
         let _guards = TracingBuilder::new()
             .with_default_file()
-            .with_json(false)
+            .with_json(Some(false))
             .with_rust_log("info")
             .with_otel_metric_export_interval("10000")
             .with_otel(crate::TracingOtelParams {
@@ -335,7 +335,7 @@ pub mod test {
     pub fn use_external_metrics() {
         let _guards = TracingBuilder::new()
             .with_default_file()
-            .with_json(false)
+            .with_json(Some(false))
             .with_rust_log("info")
             .with_otel_metric_export_interval("10000")
             .with_otel(crate::TracingOtelParams {
@@ -369,7 +369,7 @@ pub mod test {
     pub fn test_basic_logging() {
         let _guards = TracingBuilder::new()
             .with_rust_log("info")
-            .with_json(true)
+            .with_json(Some(false))
             .try_init()
             .unwrap();
 
