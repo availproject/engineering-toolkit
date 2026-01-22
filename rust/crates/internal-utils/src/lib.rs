@@ -21,29 +21,27 @@ use opentelemetry_sdk::propagation::TraceContextPropagator;
 #[cfg(feature = "otel")]
 use opentelemetry_sdk::trace::SdkTracerProvider;
 
-pub mod ext {
-    #[cfg(feature = "otel")]
-    pub use opentelemetry;
-    #[cfg(feature = "otel")]
-    pub use opentelemetry_appender_tracing;
-    #[cfg(feature = "otel")]
-    pub use opentelemetry_otlp;
-    #[cfg(feature = "otel")]
-    pub use opentelemetry_sdk;
-    #[cfg(feature = "otel")]
-    pub use opentelemetry_semantic_conventions;
+#[cfg(feature = "otel")]
+pub use opentelemetry;
+#[cfg(feature = "otel")]
+pub use opentelemetry_appender_tracing;
+#[cfg(feature = "otel")]
+pub use opentelemetry_otlp;
+#[cfg(feature = "otel")]
+pub use opentelemetry_sdk;
+#[cfg(feature = "otel")]
+pub use opentelemetry_semantic_conventions;
 
-    #[cfg(feature = "db")]
-    pub use sqlx;
+#[cfg(feature = "db")]
+pub use sqlx;
 
-    #[cfg(feature = "openapi")]
-    pub use utoipa;
-    #[cfg(feature = "openapi")]
-    pub use utoipa_axum;
+#[cfg(feature = "openapi")]
+pub use utoipa;
+#[cfg(feature = "openapi")]
+pub use utoipa_axum;
 
-    pub use tracing;
-    pub use tracing_subscriber;
-}
+pub use tracing;
+pub use tracing_subscriber;
 
 #[derive(Default)]
 pub struct TracingGuards {
