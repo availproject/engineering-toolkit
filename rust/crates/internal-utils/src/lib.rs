@@ -36,6 +36,11 @@ pub mod ext {
     #[cfg(feature = "db")]
     pub use sqlx;
 
+    #[cfg(feature = "openapi")]
+    pub use utoipa;
+    #[cfg(feature = "openapi")]
+    pub use utoipa_axum;
+
     pub use tracing;
     pub use tracing_subscriber;
 }
