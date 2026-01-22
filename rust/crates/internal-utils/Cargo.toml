@@ -15,10 +15,20 @@ opentelemetry-otlp = { version = "0.31", optional = true }
 opentelemetry-semantic-conventions = { version = "0.31", optional = true }
 opentelemetry_sdk = { version = "0.31", optional = true }
 
+# OpenAPI
+utoipa = { version = "5.4", optional = true }
+utoipa-axum = { version = "0.2", optional = true }
+
 # DB
 sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "tls-native-tls", "postgres", "chrono"], optional = true } 
 
+[dev-dependencies]
+axum = { version = "0.8" }
+serde = { version = "1.0" }
+tokio = { version = "1.49" }
+
 [features]
-default = ["otel", "db"]
+default = ["otel", "db", "openapi"]
 otel = ["dep:opentelemetry", "dep:opentelemetry", "dep:opentelemetry-appender-tracing", "dep:opentelemetry-otlp", "dep:opentelemetry-semantic-conventions", "dep:opentelemetry_sdk"]
 db = ["dep:sqlx"]
+openapi = ["dep:utoipa", "dep:utoipa-axum"]
