@@ -1,6 +1,12 @@
 import { metrics, trace } from "@opentelemetry/api";
 import { createLogger } from "./logger.js";
-import { initializeOtel, shutdownOtel, type OtelInstance } from "./otel.js";
+import {
+  initializeOtel,
+  shutdownOtel,
+  DEFAULT_ENDPOINTS,
+  SHUTDOWN_TIMEOUT_MS,
+  type OtelInstance,
+} from "./otel.js";
 import type {
   LogLevel,
   LogFormat,
@@ -10,7 +16,6 @@ import type {
   TracingGuards,
 } from "./types.js";
 
-// Re-export types
 export type {
   LogLevel,
   LogFormat,
@@ -20,7 +25,8 @@ export type {
   TracingGuards,
 };
 
-// Re-export logger utilities
+export { DEFAULT_ENDPOINTS, SHUTDOWN_TIMEOUT_MS };
+
 export { createLogger, createSimpleLogger, createChildLogger } from "./logger.js";
 
 /**
@@ -73,20 +79,9 @@ export class TracingBuilder {
     return TracingBuilder.create();
   }
 
-  /**
-   * Sets the log level.
-   * @param level - Log level (trace, debug, info, warn, error, fatal)
-   */
   withLogLevel(level: LogLevel): this {
     this.config.level = level;
     return this;
-  }
-
-  /**
-   * Alias for withLogLevel to match Rust API.
-   */
-  withRustLog(level: LogLevel): this {
-    return this.withLogLevel(level);
   }
 
   /**
@@ -209,7 +204,7 @@ export class TracingBuilder {
   // Private helper methods
 
   private getEnvLogLevel(): LogLevel {
-    const env = process.env["LOG_LEVEL"] ?? process.env["RUST_LOG"];
+    const env = process.env["LOG_LEVEL"];
     const validLevels: LogLevel[] = [
       "trace",
       "debug",

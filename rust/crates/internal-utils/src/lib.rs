@@ -126,7 +126,7 @@ impl TracingBuilder {
     }
 
     pub fn with_stdout(mut self, value: bool) -> Self {
-        self.json = Some(value);
+        self.stdout = Some(value);
         self
     }
 
