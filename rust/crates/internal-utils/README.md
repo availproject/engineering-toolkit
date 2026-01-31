@@ -6,7 +6,13 @@ git clone https://github.com/SigNoz/signoz.git
 cd signoz/deploy/docker/clickhouse-setup
 docker compose up -d
 # Open http://localhost:8080/
+
+# Default Endpoints:
+# - http://localhost:4318/v1/traces
+# - http://localhost:4318/v1/metrics
+# - http://localhost:4318/v1/logs
 ```
+
 
 To stop all containers
 ```bash

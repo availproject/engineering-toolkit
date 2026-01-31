@@ -76,6 +76,7 @@ impl Drop for TracingGuards {
 }
 
 #[cfg(feature = "otel")]
+#[derive(Debug, Clone)]
 pub struct TracingOtelParams {
     pub endpoint_traces: Option<String>,
     pub endpoint_metrics: Option<String>,
@@ -84,7 +85,19 @@ pub struct TracingOtelParams {
     pub service_version: String,
 }
 
-#[derive(Default)]
+#[cfg(feature = "otel")]
+impl Default for TracingOtelParams {
+    fn default() -> Self {
+        Self {
+            endpoint_traces: Some("http://localhost:4318/v1/traces".into()),
+            endpoint_metrics: Some("http://localhost:4318/v1/metrics".into()),
+            endpoint_logs: Some("http://localhost:4318/v1/logs".into()),
+            service_name: env!("CARGO_CRATE_NAME").into(),
+            service_version: env!("CARGO_PKG_VERSION").into(),
+        }
+    }
+}
+
 pub struct TracingBuilder {
     json: Option<bool>,
     stdout: Option<bool>,
@@ -94,16 +107,22 @@ pub struct TracingBuilder {
     otel: Option<TracingOtelParams>,
 }
 
+impl Default for TracingBuilder {
+    fn default() -> Self {
+        Self {
+            json: Some(true),
+            stdout: Some(true),
+            file: None,
+            env_filter: None,
+            #[cfg(feature = "otel")]
+            otel: Default::default(),
+        }
+    }
+}
+
 impl TracingBuilder {
     pub fn new() -> Self {
         Self::default()
-    }
-
-    pub fn simple_initialize() -> Result<(), Box<dyn Error + Send + Sync>> {
-        tracing_subscriber::fmt()
-            .json()
-            .with_env_filter(EnvFilter::from_default_env())
-            .try_init()
     }
 
     pub fn with_stdout(mut self, value: bool) -> Self {
@@ -132,7 +151,7 @@ impl TracingBuilder {
         self
     }
 
-    pub fn with_default_file(mut self) -> Self {
+    pub fn with_predefined_file(mut self) -> Self {
         self.file = Some("./log.txt".to_owned());
         self
     }
@@ -160,6 +179,7 @@ impl TracingBuilder {
 
         let json = self.json.unwrap_or(true);
         let stdout = self.stdout.unwrap_or(true);
+        #[allow(unused_mut)]
         let mut guard = TracingGuards::default();
         let mut layers = Vec::new();
 
@@ -290,7 +310,7 @@ pub mod test {
     #[test]
     pub fn tracing_works() {
         let _guards = TracingBuilder::new()
-            .with_default_file()
+            .with_predefined_file()
             .with_json(Some(false))
             .with_rust_log("info")
             .with_otel_metric_export_interval("10000")
@@ -337,7 +357,7 @@ pub mod test {
     #[test]
     pub fn use_external_metrics() {
         let _guards = TracingBuilder::new()
-            .with_default_file()
+            .with_predefined_file()
             .with_json(Some(false))
             .with_rust_log("info")
             .with_otel_metric_export_interval("10000")
@@ -365,7 +385,6 @@ pub mod test {
                 )
             })
             .build();
-        sleep(Duration::from_secs(60));
     }
 
     #[test]
