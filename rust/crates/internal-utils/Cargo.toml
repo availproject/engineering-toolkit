@@ -25,7 +25,8 @@ sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio",
 [dev-dependencies]
 axum = { version = "0.8" }
 serde = { version = "1.0" }
-tokio = { version = "1.49" }
+tokio = { version = "1.49", features = ["full"] }
+uuid = { version = "1", features = ["v4"] }
 
 [features]
 default = ["otel", "db", "openapi"]

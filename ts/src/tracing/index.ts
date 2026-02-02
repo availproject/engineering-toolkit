@@ -29,6 +29,11 @@ export { DEFAULT_ENDPOINTS, SHUTDOWN_TIMEOUT_MS };
 
 export { createLogger, createSimpleLogger, createChildLogger } from "./logger.js";
 
+export { traced, tracedSync, withSpan, withSpanSync } from "./decorators.js";
+
+export { createMetricsHelper, MetricsHelper } from "./metrics.js";
+export type { HttpRequestOptions, DbQueryOptions } from "./metrics.js";
+
 /**
  * Builder for configuring and initializing the tracing system.
  * Provides a fluent API matching the Rust internal-utils pattern.

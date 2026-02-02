@@ -1,3 +1,5 @@
+pub mod metrics;
+
 use std::error::Error;
 use std::fs::File;
 pub use tracing::{
@@ -39,6 +41,9 @@ pub use sqlx;
 pub use utoipa;
 #[cfg(feature = "openapi")]
 pub use utoipa_axum;
+
+#[cfg(feature = "otel")]
+pub use metrics::{HttpRequestMetrics, IntoOtelAttributes, MetricsHelper};
 
 pub use tracing;
 pub use tracing_subscriber;
