@@ -13,65 +13,55 @@ import {
   LoggerProvider,
 } from "@opentelemetry/sdk-logs";
 import { logs } from "@opentelemetry/api-logs";
+import { propagation } from "@opentelemetry/api";
+import { W3CTraceContextPropagator } from "@opentelemetry/core";
 import { PinoInstrumentation } from "@opentelemetry/instrumentation-pino";
 import { HttpInstrumentation } from "@opentelemetry/instrumentation-http";
 import { PgInstrumentation } from "@opentelemetry/instrumentation-pg";
 import type { OtelParams } from "./types.js";
 
-/**
- * OpenTelemetry SDK instance and associated resources.
- */
+export const DEFAULT_ENDPOINTS = {
+  traces: "http://localhost:4318/v1/traces",
+  metrics: "http://localhost:4318/v1/metrics",
+  logs: "http://localhost:4318/v1/logs",
+} as const;
+
+export const SHUTDOWN_TIMEOUT_MS = 100;
+
 export interface OtelInstance {
   sdk: NodeSDK;
-  loggerProvider?: LoggerProvider | undefined;
+  loggerProvider: LoggerProvider;
 }
 
-/**
- * Initializes OpenTelemetry with the provided configuration.
- *
- * @param params - OpenTelemetry configuration parameters
- * @returns Initialized OpenTelemetry instance
- */
 export function initializeOtel(params: OtelParams): OtelInstance {
-  const { serviceName, serviceVersion, endpointTraces, endpointMetrics, endpointLogs } =
-    params;
+  const { serviceName, serviceVersion } = params;
 
-  // Create resource with service information
+  propagation.setGlobalPropagator(new W3CTraceContextPropagator());
+
+  const endpointTraces = params.endpointTraces ?? DEFAULT_ENDPOINTS.traces;
+  const endpointMetrics = params.endpointMetrics ?? DEFAULT_ENDPOINTS.metrics;
+  const endpointLogs = params.endpointLogs ?? DEFAULT_ENDPOINTS.logs;
+
   const resource = new Resource({
     [ATTR_SERVICE_NAME]: serviceName,
     [ATTR_SERVICE_VERSION]: serviceVersion,
   });
 
-  // Configure trace exporter if endpoint provided
-  const traceExporter = endpointTraces
-    ? new OTLPTraceExporter({ url: endpointTraces })
-    : undefined;
+  const traceExporter = new OTLPTraceExporter({ url: endpointTraces });
 
-  // Configure metric reader if endpoint provided
-  const metricReader = endpointMetrics
-    ? new PeriodicExportingMetricReader({
-        exporter: new OTLPMetricExporter({ url: endpointMetrics }),
-        exportIntervalMillis: getMetricExportInterval(),
-      })
-    : undefined;
+  const metricReader = new PeriodicExportingMetricReader({
+    exporter: new OTLPMetricExporter({ url: endpointMetrics }),
+    exportIntervalMillis: getMetricExportInterval(),
+  });
 
-  // Configure log provider if endpoint provided
-  let loggerProvider: LoggerProvider | undefined;
-  if (endpointLogs) {
-    const logExporter = new OTLPLogExporter({ url: endpointLogs });
-    loggerProvider = new LoggerProvider({ resource });
-    loggerProvider.addLogRecordProcessor(
-      new BatchLogRecordProcessor(logExporter)
-    );
-    logs.setGlobalLoggerProvider(loggerProvider);
-  }
+  const logExporter = new OTLPLogExporter({ url: endpointLogs });
+  const loggerProvider = new LoggerProvider({ resource });
+  loggerProvider.addLogRecordProcessor(new BatchLogRecordProcessor(logExporter));
+  logs.setGlobalLoggerProvider(loggerProvider);
 
-  // Create instrumentations
   const instrumentations = [
     new PinoInstrumentation({
-      // Inject trace context into log records
-      logHook: (_span, record) => {
-        // Add custom attributes to logs if needed
+      logHook: (_span: unknown, record: Record<string, unknown>) => {
         record["otel.instrumented"] = true;
       },
     }),
@@ -79,58 +69,41 @@ export function initializeOtel(params: OtelParams): OtelInstance {
     new PgInstrumentation(),
   ];
 
-  // Build SDK configuration
-  const sdkConfig: ConstructorParameters<typeof NodeSDK>[0] = {
+  const sdk = new NodeSDK({
     resource,
     instrumentations,
-  };
-
-  if (traceExporter) {
-    sdkConfig.traceExporter = traceExporter;
-  }
-
-  if (metricReader) {
-    sdkConfig.metricReader = metricReader;
-  }
-
-  // Create and start the SDK
-  const sdk = new NodeSDK(sdkConfig);
+    traceExporter,
+    metricReader,
+  });
 
   sdk.start();
 
   return { sdk, loggerProvider };
 }
 
-/**
- * Gracefully shuts down the OpenTelemetry SDK.
- * Flushes all pending telemetry before returning.
- *
- * @param instance - OpenTelemetry instance to shutdown
- */
 export async function shutdownOtel(instance: OtelInstance): Promise<void> {
   const { sdk, loggerProvider } = instance;
 
-  // Shutdown logger provider first to flush logs
-  if (loggerProvider) {
-    try {
-      await loggerProvider.forceFlush();
-      await loggerProvider.shutdown();
-    } catch (error) {
-      console.error("Error shutting down logger provider:", error);
-    }
-  }
+  const withTimeout = <T>(promise: Promise<T>, ms: number): Promise<T> =>
+    Promise.race([
+      promise,
+      new Promise<T>((_, reject) =>
+        setTimeout(() => reject(new Error("Shutdown timeout")), ms)
+      ),
+    ]);
 
-  // Shutdown SDK (handles traces and metrics)
   try {
-    await sdk.shutdown();
-  } catch (error) {
-    console.error("Error shutting down OpenTelemetry SDK:", error);
-  }
+    await withTimeout(loggerProvider.forceFlush(), SHUTDOWN_TIMEOUT_MS);
+    await withTimeout(loggerProvider.shutdown(), SHUTDOWN_TIMEOUT_MS);
+  } catch {}
+
+  try {
+    await withTimeout(sdk.shutdown(), SHUTDOWN_TIMEOUT_MS);
+  } catch {}
 }
 
-/**
- * Gets the metric export interval from environment or default.
- */
+const DEFAULT_METRIC_EXPORT_INTERVAL_MS = 60000;
+
 function getMetricExportInterval(): number {
   const envInterval = process.env["OTEL_METRIC_EXPORT_INTERVAL"];
   if (envInterval) {
@@ -139,5 +112,5 @@ function getMetricExportInterval(): number {
       return parsed;
     }
   }
-  return 60000; // Default: 60 seconds
+  return DEFAULT_METRIC_EXPORT_INTERVAL_MS;
 }
