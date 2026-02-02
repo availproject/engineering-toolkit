@@ -52,6 +52,7 @@ pub trait IntoOtelAttributes {
     fn into_attributes(&self) -> Vec<KeyValue>;
 }
 
+#[derive(Debug, Clone)]
 pub struct HttpRequestMetrics {
     pub method: String,
     pub route: String,
