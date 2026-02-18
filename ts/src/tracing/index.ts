@@ -11,6 +11,7 @@ import type {
   LogLevel,
   LogFormat,
   OtelParams,
+  OtelLogConfig,
   FileOutputConfig,
   TracingConfig,
   TracingGuards,
@@ -20,6 +21,7 @@ export type {
   LogLevel,
   LogFormat,
   OtelParams,
+  OtelLogConfig,
   FileOutputConfig,
   TracingConfig,
   TracingGuards,
@@ -27,7 +29,7 @@ export type {
 
 export { DEFAULT_ENDPOINTS, SHUTDOWN_TIMEOUT_MS };
 
-export { createLogger, createSimpleLogger, createChildLogger } from "./logger.js";
+export { createLogger, createSimpleLogger, createChildLogger, shutdownOtelLogs } from "./logger.js";
 
 export { traced, tracedSync, withSpan, withSpanSync } from "./decorators.js";
 

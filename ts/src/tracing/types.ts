@@ -30,6 +30,18 @@ export interface OtelParams {
 }
 
 /**
+ * Configuration for exporting logs to an OTLP endpoint.
+ */
+export interface OtelLogConfig {
+  /** OTLP endpoint for logs. When omitted, OTLPLogExporter uses its
+   *  defaults: OTEL_EXPORTER_OTLP_LOGS_ENDPOINT env var, then
+   *  OTEL_EXPORTER_OTLP_ENDPOINT + /v1/logs, then http://localhost:4318/v1/logs */
+  endpoint?: string | undefined;
+  /** Service name for log resource attribution */
+  serviceName: string;
+}
+
+/**
  * File output configuration.
  */
 export interface FileOutputConfig {
