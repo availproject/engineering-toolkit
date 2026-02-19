@@ -1,120 +1,89 @@
-import { metrics, type Counter, type Histogram, type Attributes } from "@opentelemetry/api";
-import {
-  ATTR_HTTP_REQUEST_METHOD,
-  ATTR_HTTP_RESPONSE_STATUS_CODE,
-  ATTR_HTTP_ROUTE,
-  ATTR_DB_OPERATION_NAME,
-  ATTR_ERROR_TYPE,
-} from "@opentelemetry/semantic-conventions";
+import { metrics, type Attributes, type Counter, type UpDownCounter } from "@opentelemetry/api";
 
-const ATTR_DB_SYSTEM = "db.system" as const;
-
-export interface HttpRequestOptions {
-  method: string;
-  route: string;
-  statusCode: number;
-  durationMs: number;
-  attributes?: Attributes;
+export interface InstrumentOptions {
+  description?: string;
+  unit?: string;
 }
 
-export interface DbQueryOptions {
-  system: string;
-  operation: string;
-  durationMs: number;
-  success: boolean;
-  attributes?: Attributes;
+export class TimedHistogram {
+  private readonly histogram;
+
+  constructor(histogram: ReturnType<ReturnType<typeof metrics.getMeter>["createHistogram"]>) {
+    this.histogram = histogram;
+  }
+
+  record(value: number, attrs?: Attributes) {
+    this.histogram.record(value, attrs);
+  }
+
+  async time<T>(fn: () => Promise<T>): Promise<T>;
+  async time<T>(attrs: Attributes, fn: () => Promise<T>): Promise<T>;
+  async time<T>(
+    attrsOrFn: Attributes | (() => Promise<T>),
+    maybeFn?: () => Promise<T>,
+  ): Promise<T> {
+    const [attrs, fn] = typeof attrsOrFn === "function"
+      ? [undefined, attrsOrFn]
+      : [attrsOrFn, maybeFn!];
+
+    const start = performance.now();
+    try {
+      return await fn();
+    } finally {
+      this.histogram.record(performance.now() - start, attrs);
+    }
+  }
+
+  timeSync<T>(fn: () => T): T;
+  timeSync<T>(attrs: Attributes, fn: () => T): T;
+  timeSync<T>(
+    attrsOrFn: Attributes | (() => T),
+    maybeFn?: () => T,
+  ): T {
+    const [attrs, fn] = typeof attrsOrFn === "function"
+      ? [undefined, attrsOrFn]
+      : [attrsOrFn, maybeFn!];
+
+    const start = performance.now();
+    try {
+      return fn();
+    } finally {
+      this.histogram.record(performance.now() - start, attrs);
+    }
+  }
 }
 
-export class MetricsHelper {
+export class Metrics {
   private readonly meter;
-  private readonly httpRequestCounter: Counter;
-  private readonly httpRequestDuration: Histogram;
-  private readonly dbQueryCounter: Counter;
-  private readonly dbQueryDuration: Histogram;
 
-  constructor(serviceName: string) {
-    this.meter = metrics.getMeter(serviceName);
-
-    this.httpRequestCounter = this.meter.createCounter("http.server.request.total", {
-      description: "Total number of HTTP requests",
-      unit: "1",
-    });
-
-    this.httpRequestDuration = this.meter.createHistogram("http.server.request.duration", {
-      description: "HTTP request duration",
-      unit: "ms",
-    });
-
-    this.dbQueryCounter = this.meter.createCounter("db.client.operation.total", {
-      description: "Total number of database operations",
-      unit: "1",
-    });
-
-    this.dbQueryDuration = this.meter.createHistogram("db.client.operation.duration", {
-      description: "Database operation duration",
-      unit: "ms",
-    });
+  constructor(name: string) {
+    this.meter = metrics.getMeter(name);
   }
 
-  recordHttpRequest(options: HttpRequestOptions): void {
-    const attrs: Attributes = {
-      [ATTR_HTTP_REQUEST_METHOD]: options.method,
-      [ATTR_HTTP_ROUTE]: options.route,
-      [ATTR_HTTP_RESPONSE_STATUS_CODE]: options.statusCode,
-      ...options.attributes,
-    };
-
-    this.httpRequestCounter.add(1, attrs);
-    this.httpRequestDuration.record(options.durationMs, attrs);
+  counter(name: string, options?: InstrumentOptions): Counter {
+    return this.meter.createCounter(name, options);
   }
 
-  recordDbQuery(options: DbQueryOptions): void {
-    const attrs: Attributes = {
-      [ATTR_DB_SYSTEM]: options.system,
-      [ATTR_DB_OPERATION_NAME]: options.operation,
-      ...(options.success ? {} : { [ATTR_ERROR_TYPE]: "db_error" }),
-      ...options.attributes,
-    };
-
-    this.dbQueryCounter.add(1, attrs);
-    this.dbQueryDuration.record(options.durationMs, attrs);
+  histogram(name: string, options?: InstrumentOptions): TimedHistogram {
+    return new TimedHistogram(this.meter.createHistogram(name, options));
   }
 
-  counter(name: string, options?: { description?: string; unit?: string }): Counter {
-    return this.meter.createCounter(name, {
-      ...(options?.description && { description: options.description }),
-      unit: options?.unit ?? "1",
-    });
+  upDownCounter(name: string, options?: InstrumentOptions): UpDownCounter {
+    return this.meter.createUpDownCounter(name, options);
   }
 
-  histogram(name: string, options?: { description?: string; unit?: string }): Histogram {
-    return this.meter.createHistogram(name, {
-      ...(options?.description && { description: options.description }),
-      ...(options?.unit && { unit: options.unit }),
-    });
-  }
+  gauge(name: string, callback: () => number, options?: InstrumentOptions & { attributes?: Attributes }) {
+    const attrs = options?.attributes ?? {};
+    const gaugeOptions: InstrumentOptions = {};
+    if (options?.description) gaugeOptions.description = options.description;
+    if (options?.unit) gaugeOptions.unit = options.unit;
 
-  upDownCounter(name: string, options?: { description?: string; unit?: string }) {
-    return this.meter.createUpDownCounter(name, {
-      ...(options?.description && { description: options.description }),
-      unit: options?.unit ?? "1",
-    });
-  }
-
-  gauge(
-    name: string,
-    callback: () => number,
-    options?: { description?: string; unit?: string; attributes?: Attributes }
-  ) {
-    return this.meter.createObservableGauge(name, {
-      ...(options?.description && { description: options.description }),
-      ...(options?.unit && { unit: options.unit }),
-    }).addCallback((result) => {
-      result.observe(callback(), options?.attributes ?? {});
+    this.meter.createObservableGauge(name, gaugeOptions).addCallback((result) => {
+      result.observe(callback(), attrs);
     });
   }
 }
 
-export function createMetricsHelper(serviceName: string): MetricsHelper {
-  return new MetricsHelper(serviceName);
+export function createMetrics(name: string): Metrics {
+  return new Metrics(name);
 }

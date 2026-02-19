@@ -62,5 +62,5 @@ Default OTLP endpoints:
 
 Stop containers:
 ```bash
-docker rm -f $(docker ps -aq)
+docker compose down -v
 ```

@@ -1,116 +1,174 @@
 import { NodeSDK } from "@opentelemetry/sdk-node";
-import { Resource } from "@opentelemetry/resources";
-import {
-  ATTR_SERVICE_NAME,
-  ATTR_SERVICE_VERSION,
-} from "@opentelemetry/semantic-conventions";
-import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
-import { OTLPMetricExporter } from "@opentelemetry/exporter-metrics-otlp-http";
-import { OTLPLogExporter } from "@opentelemetry/exporter-logs-otlp-http";
-import { PeriodicExportingMetricReader } from "@opentelemetry/sdk-metrics";
-import {
-  BatchLogRecordProcessor,
-  LoggerProvider,
-} from "@opentelemetry/sdk-logs";
+import { SpanContext } from "@opentelemetry/api";
 import { logs } from "@opentelemetry/api-logs";
-import { propagation } from "@opentelemetry/api";
-import { W3CTraceContextPropagator } from "@opentelemetry/core";
-import { PinoInstrumentation } from "@opentelemetry/instrumentation-pino";
-import { HttpInstrumentation } from "@opentelemetry/instrumentation-http";
-import { PgInstrumentation } from "@opentelemetry/instrumentation-pg";
-import type { OtelParams } from "./types.js";
+import { BatchSpanProcessor } from "@opentelemetry/sdk-trace-base";
+import { PeriodicExportingMetricReader } from "@opentelemetry/sdk-metrics";
+import { SimpleLogRecordProcessor, ReadableLogRecord, LogRecordExporter } from "@opentelemetry/sdk-logs";
+import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-proto";
+import { OTLPMetricExporter } from "@opentelemetry/exporter-metrics-otlp-proto";
+import { OTLPLogExporter } from "@opentelemetry/exporter-logs-otlp-proto";
+import { Logger } from "./logger.js";
 
-export const DEFAULT_ENDPOINTS = {
-  traces: "http://localhost:4318/v1/traces",
-  metrics: "http://localhost:4318/v1/metrics",
-  logs: "http://localhost:4318/v1/logs",
+export interface OtelParams {
+  endpointTraces?: string;
+  endpointMetrics?: string;
+  endpointLogs?: string;
+  serviceName?: string;
+  serviceVersion?: string;
+}
+
+export interface InitResult {
+  logger: Logger;
+  shutdown: () => Promise<void>;
+}
+
+export class TracingBuilder {
+  private otelParams: OtelParams = {};
+  private jsonOutput = true;
+
+  withOtel(value: OtelParams): this {
+    this.otelParams = value;
+    return this;
+  }
+
+  withJson(value: boolean): this {
+    this.jsonOutput = value;
+    return this;
+  }
+
+  async build(): Promise<InitResult> {
+    const spanProcessors = [];
+    if (this.otelParams.endpointTraces != undefined) {
+      spanProcessors.push(new BatchSpanProcessor(
+        new OTLPTraceExporter({ url: this.otelParams.endpointTraces })
+      ));
+    }
+
+    const metricReaders = [];
+    if (this.otelParams.endpointMetrics != undefined) {
+      metricReaders.push(new PeriodicExportingMetricReader({
+        exporter: new OTLPMetricExporter({ url: this.otelParams.endpointMetrics }),
+      }));
+    }
+
+    const logRecordProcessors = [];
+    logRecordProcessors.push(new SimpleLogRecordProcessor(new ConsoleLogExporter(this.jsonOutput)));
+    if (this.otelParams.endpointLogs != undefined) {
+      logRecordProcessors.push(new SimpleLogRecordProcessor(
+        new OTLPLogExporter({ url: this.otelParams.endpointLogs })
+      ));
+    }
+
+    const sdk = new NodeSDK({
+      serviceName: this.otelParams.serviceName ?? "app",
+      spanProcessors,
+      metricReaders,
+      logRecordProcessors,
+    });
+
+    sdk.start();
+
+    const loggerName = this.otelParams.serviceName ?? "app";
+    const logger = new Logger(logs.getLogger(loggerName));
+
+    return {
+      logger,
+      shutdown: () => sdk.shutdown(),
+    };
+  }
+}
+
+
+const ANSI = {
+  reset: "\x1b[0m",
+  dim: "\x1b[2m",
+  red: "\x1b[31m",
+  green: "\x1b[32m",
+  yellow: "\x1b[33m",
+  blue: "\x1b[34m",
+  magenta: "\x1b[35m",
 } as const;
 
-export const SHUTDOWN_TIMEOUT_MS = 100;
-
-export interface OtelInstance {
-  sdk: NodeSDK;
-  loggerProvider: LoggerProvider;
-}
-
-export function initializeOtel(params: OtelParams): OtelInstance {
-  const { serviceName, serviceVersion } = params;
-
-  propagation.setGlobalPropagator(new W3CTraceContextPropagator());
-
-  const endpointTraces = params.endpointTraces ?? DEFAULT_ENDPOINTS.traces;
-  const endpointMetrics = params.endpointMetrics ?? DEFAULT_ENDPOINTS.metrics;
-  const endpointLogs = params.endpointLogs ?? DEFAULT_ENDPOINTS.logs;
-
-  const resource = new Resource({
-    [ATTR_SERVICE_NAME]: serviceName,
-    [ATTR_SERVICE_VERSION]: serviceVersion,
-  });
-
-  const traceExporter = new OTLPTraceExporter({ url: endpointTraces });
-
-  const metricReader = new PeriodicExportingMetricReader({
-    exporter: new OTLPMetricExporter({ url: endpointMetrics }),
-    exportIntervalMillis: getMetricExportInterval(),
-  });
-
-  const logExporter = new OTLPLogExporter({ url: endpointLogs });
-  const loggerProvider = new LoggerProvider({ resource });
-  loggerProvider.addLogRecordProcessor(new BatchLogRecordProcessor(logExporter));
-  logs.setGlobalLoggerProvider(loggerProvider);
-
-  const instrumentations = [
-    new PinoInstrumentation({
-      logHook: (_span: unknown, record: Record<string, unknown>) => {
-        record["otel.instrumented"] = true;
-      },
-    }),
-    new HttpInstrumentation(),
-    new PgInstrumentation(),
-  ];
-
-  const sdk = new NodeSDK({
-    resource,
-    instrumentations,
-    traceExporter,
-    metricReader,
-  });
-
-  sdk.start();
-
-  return { sdk, loggerProvider };
-}
-
-export async function shutdownOtel(instance: OtelInstance): Promise<void> {
-  const { sdk, loggerProvider } = instance;
-
-  const withTimeout = <T>(promise: Promise<T>, ms: number): Promise<T> =>
-    Promise.race([
-      promise,
-      new Promise<T>((_, reject) =>
-        setTimeout(() => reject(new Error("Shutdown timeout")), ms)
-      ),
-    ]);
-
-  try {
-    await withTimeout(loggerProvider.forceFlush(), SHUTDOWN_TIMEOUT_MS);
-    await withTimeout(loggerProvider.shutdown(), SHUTDOWN_TIMEOUT_MS);
-  } catch {}
-
-  try {
-    await withTimeout(sdk.shutdown(), SHUTDOWN_TIMEOUT_MS);
-  } catch {}
-}
-
-const DEFAULT_METRIC_EXPORT_INTERVAL_MS = 60000;
-
-function getMetricExportInterval(): number {
-  const envInterval = process.env["OTEL_METRIC_EXPORT_INTERVAL"];
-  if (envInterval) {
-    const parsed = parseInt(envInterval, 10);
-    if (!isNaN(parsed) && parsed > 0) {
-      return parsed;
-    }
+function colorLevel(level: string): string {
+  const padded = level.padEnd(5);
+  switch (level) {
+    case "TRACE": return `${ANSI.magenta}${padded}${ANSI.reset}`;
+    case "DEBUG": return `${ANSI.blue}${padded}${ANSI.reset}`;
+    case "INFO": return `${ANSI.green}${padded}${ANSI.reset}`;
+    case "WARN": return `${ANSI.yellow}${padded}${ANSI.reset}`;
+    case "ERROR": return `${ANSI.red}${padded}${ANSI.reset}`;
+    case "FATAL": return `${ANSI.red}${padded}${ANSI.reset}`;
+    default: return padded;
   }
-  return DEFAULT_METRIC_EXPORT_INTERVAL_MS;
 }
+
+function formatBody(body: unknown): string {
+  return typeof body === "string" ? body : JSON.stringify(body);
+}
+
+function spanIdsFromCtx(ctx: SpanContext): { trace_id: string; span_id: string } {
+  return { trace_id: ctx.traceId, span_id: ctx.spanId };
+}
+
+function hrTimeToISOString(hrTime: [number, number]): string {
+  return new Date(hrTime[0] * 1000 + hrTime[1] / 1e6).toISOString();
+}
+
+class ConsoleLogExporter implements LogRecordExporter {
+  private readonly json: boolean;
+
+  constructor(json: boolean) {
+    this.json = json;
+  }
+
+  export(
+    records: ReadableLogRecord[],
+    resultCallback: (result: { code: number; error?: Error }) => void
+  ): void {
+    for (const r of records) {
+      if (this.json) {
+        this.exportJson(r);
+      } else {
+        this.exportPretty(r);
+      }
+    }
+    resultCallback({ code: 0 });
+  }
+
+  private exportJson(r: ReadableLogRecord): void {
+    const message = formatBody(r.body);
+    const attrs = r.attributes ?? {};
+    const ids = r.spanContext ? spanIdsFromCtx(r.spanContext) : {};
+
+    console.log(
+      JSON.stringify({
+        timestamp: hrTimeToISOString(r.hrTime),
+        level: r.severityText ?? "INFO",
+        message,
+        ...ids,
+        ...attrs,
+      })
+    );
+  }
+
+  private exportPretty(r: ReadableLogRecord): void {
+    const timestamp = `${ANSI.dim}${hrTimeToISOString(r.hrTime)}${ANSI.reset}`;
+    const level = colorLevel(r.severityText ?? "INFO");
+    const message = formatBody(r.body);
+    const attrs = r.attributes ?? {};
+    const ids = r.spanContext ? spanIdsFromCtx(r.spanContext) : {};
+
+    const kvPairs = { ...ids, ...attrs };
+    const kvEntries = Object.entries(kvPairs);
+    const kvStr = kvEntries.length > 0
+      ? "  " + kvEntries.map(([k, v]) => `${ANSI.dim}${k}${ANSI.reset}=${v}`).join(" ")
+      : "";
+
+    console.log(`${timestamp}  ${level}  ${message}${kvStr}`);
+  }
+
+  shutdown(): Promise<void> {
+    return Promise.resolve();
+  }
+}
+

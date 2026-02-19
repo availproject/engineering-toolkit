@@ -32,26 +32,21 @@
     "node": ">=20.0.0"
   },
   "dependencies": {
-    "pino": "^9.6.0",
     "@opentelemetry/api": "^1.9.0",
-    "@opentelemetry/core": "^1.30.0",
-    "@opentelemetry/api-logs": "^0.57.0",
-    "@opentelemetry/sdk-node": "^0.57.0",
-    "@opentelemetry/sdk-trace-node": "^1.30.0",
-    "@opentelemetry/sdk-logs": "^0.57.0",
-    "@opentelemetry/sdk-metrics": "^1.30.0",
-    "@opentelemetry/exporter-trace-otlp-http": "^0.57.0",
-    "@opentelemetry/exporter-metrics-otlp-http": "^0.57.0",
-    "@opentelemetry/exporter-logs-otlp-http": "^0.57.0",
-    "@opentelemetry/instrumentation-pino": "^0.46.0",
-    "@opentelemetry/instrumentation-pg": "^0.51.0",
-    "@opentelemetry/instrumentation-http": "^0.57.0",
-    "@opentelemetry/semantic-conventions": "^1.28.0",
-    "@opentelemetry/resources": "^1.30.0"
+    "@opentelemetry/core": "^2.5.1",
+    "@opentelemetry/api-logs": "^0.212.0",
+    "@opentelemetry/sdk-node": "^0.212.0",
+    "@opentelemetry/sdk-trace-node": "^2.5.1",
+    "@opentelemetry/sdk-logs": "^0.212.0",
+    "@opentelemetry/sdk-metrics": "^2.5.1",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.212.0",
+    "@opentelemetry/exporter-metrics-otlp-http": "^0.212.0",
+    "@opentelemetry/exporter-logs-otlp-http": "^0.212.0",
+    "@opentelemetry/semantic-conventions": "^1.39.0",
+    "@opentelemetry/resources": "^2.5.1"
   },
   "devDependencies": {
-    "@types/node": "^22.10.5",
-    "pino-pretty": "^13.0.0",
+    "@types/node": "^25.3.0",
     "tsx": "^4.19.2",
     "typescript": "^5.7.3"
   }
