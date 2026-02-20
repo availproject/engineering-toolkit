@@ -1,5 +1,4 @@
 import { NodeSDK } from "@opentelemetry/sdk-node";
-import { SpanContext } from "@opentelemetry/api";
 import { logs } from "@opentelemetry/api-logs";
 import { BatchSpanProcessor } from "@opentelemetry/sdk-trace-base";
 import { PeriodicExportingMetricReader } from "@opentelemetry/sdk-metrics";
@@ -106,10 +105,6 @@ function formatBody(body: unknown): string {
   return typeof body === "string" ? body : JSON.stringify(body);
 }
 
-function spanIdsFromCtx(ctx: SpanContext): { trace_id: string; span_id: string } {
-  return { trace_id: ctx.traceId, span_id: ctx.spanId };
-}
-
 function hrTimeToISOString(hrTime: [number, number]): string {
   return new Date(hrTime[0] * 1000 + hrTime[1] / 1e6).toISOString();
 }
@@ -138,14 +133,12 @@ class ConsoleLogExporter implements LogRecordExporter {
   private exportJson(r: ReadableLogRecord): void {
     const message = formatBody(r.body);
     const attrs = r.attributes ?? {};
-    const ids = r.spanContext ? spanIdsFromCtx(r.spanContext) : {};
 
     console.log(
       JSON.stringify({
         timestamp: hrTimeToISOString(r.hrTime),
         level: r.severityText ?? "INFO",
         message,
-        ...ids,
         ...attrs,
       })
     );
@@ -156,10 +149,8 @@ class ConsoleLogExporter implements LogRecordExporter {
     const level = colorLevel(r.severityText ?? "INFO");
     const message = formatBody(r.body);
     const attrs = r.attributes ?? {};
-    const ids = r.spanContext ? spanIdsFromCtx(r.spanContext) : {};
 
-    const kvPairs = { ...ids, ...attrs };
-    const kvEntries = Object.entries(kvPairs);
+    const kvEntries = Object.entries(attrs);
     const kvStr = kvEntries.length > 0
       ? "  " + kvEntries.map(([k, v]) => `${ANSI.dim}${k}${ANSI.reset}=${v}`).join(" ")
       : "";
