@@ -7,6 +7,7 @@ pub use tracing::{
     warn_span,
 };
 use tracing_subscriber::EnvFilter;
+use tracing_subscriber::Layer;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
@@ -48,41 +49,43 @@ pub use metrics::{HttpRequestMetrics, IntoOtelAttributes, MetricsHelper};
 pub use tracing;
 pub use tracing_subscriber;
 
+#[cfg(feature = "otel")]
 #[derive(Default)]
-pub struct TracingGuards {
-    #[cfg(feature = "otel")]
-    otel_tracer: Option<SdkTracerProvider>,
-    #[cfg(feature = "otel")]
-    otel_meter: Option<SdkMeterProvider>,
-    #[cfg(feature = "otel")]
-    otel_logger: Option<SdkLoggerProvider>,
+pub struct OtelGuards {
+    pub tracer: Option<SdkTracerProvider>,
+    pub meter: Option<SdkMeterProvider>,
+    pub logger: Option<SdkLoggerProvider>,
 }
 
-impl Drop for TracingGuards {
+#[cfg(feature = "otel")]
+impl Drop for OtelGuards {
     fn drop(&mut self) {
-        #[cfg(feature = "otel")]
-        {
-            use std::time::Duration;
+        use std::time::Duration;
 
-            if let Some(tracer) = &self.otel_tracer {
-                _ = tracer.force_flush();
-                _ = tracer.shutdown_with_timeout(Duration::from_millis(100));
-            }
-            if let Some(meter) = &self.otel_meter {
-                _ = meter.force_flush();
-                _ = meter.shutdown_with_timeout(Duration::from_millis(100));
-            }
-            if let Some(logger) = &self.otel_logger {
-                _ = logger.force_flush();
-                _ = logger.shutdown_with_timeout(Duration::from_millis(100));
-            }
+        if let Some(tracer) = &self.tracer {
+            _ = tracer.force_flush();
+            _ = tracer.shutdown_with_timeout(Duration::from_millis(100));
+        }
+        if let Some(meter) = &self.meter {
+            _ = meter.force_flush();
+            _ = meter.shutdown_with_timeout(Duration::from_millis(100));
+        }
+        if let Some(logger) = &self.logger {
+            _ = logger.force_flush();
+            _ = logger.shutdown_with_timeout(Duration::from_millis(100));
         }
     }
 }
 
+#[derive(Default)]
+pub struct TracingGuards {
+    #[cfg(feature = "otel")]
+    pub otel: OtelGuards,
+}
+
 #[cfg(feature = "otel")]
 #[derive(Debug, Clone)]
-pub struct TracingOtelParams {
+pub struct OtelParams {
     pub endpoint_traces: Option<String>,
     pub endpoint_metrics: Option<String>,
     pub endpoint_logs: Option<String>,
@@ -91,7 +94,7 @@ pub struct TracingOtelParams {
 }
 
 #[cfg(feature = "otel")]
-impl Default for TracingOtelParams {
+impl Default for OtelParams {
     fn default() -> Self {
         Self {
             endpoint_traces: Some("http://localhost:4318/v1/traces".into()),
@@ -109,7 +112,7 @@ pub struct TracingBuilder {
     file: Option<String>,
     env_filter: Option<EnvFilter>,
     #[cfg(feature = "otel")]
-    otel: Option<TracingOtelParams>,
+    otel: Option<OtelParams>,
 }
 
 impl Default for TracingBuilder {
@@ -151,7 +154,7 @@ impl TracingBuilder {
     }
 
     #[cfg(feature = "otel")]
-    pub fn with_otel(mut self, otel: TracingOtelParams) -> Self {
+    pub fn with_otel(mut self, otel: OtelParams) -> Self {
         self.otel = Some(otel);
         self
     }
@@ -185,8 +188,7 @@ impl TracingBuilder {
         let json = self.json.unwrap_or(true);
         let stdout = self.stdout.unwrap_or(true);
         #[allow(unused_mut)]
-        let mut guard = TracingGuards::default();
-        let mut layers = Vec::new();
+        let mut layers: Vec<Box<_>> = Vec::new();
 
         if let Some(file) = self.file {
             let file = File::create(&file)?;
@@ -207,82 +209,105 @@ impl TracingBuilder {
             }
         }
 
+        let mut tracing_guards = TracingGuards::default();
         #[cfg(feature = "otel")]
-        if let Some(otel_params) = self.otel {
-            use opentelemetry_semantic_conventions::resource::{SERVICE_NAME, SERVICE_VERSION};
-            opentelemetry::global::set_text_map_propagator(TraceContextPropagator::new());
+        {
+            if let Some(otel) = self.otel {
+                use tracing_subscriber::Registry;
 
-            // Trace
-            let resource = opentelemetry_sdk::Resource::builder()
-                .with_attributes(vec![
-                    opentelemetry::KeyValue::new(SERVICE_NAME, otel_params.service_name.clone()),
-                    opentelemetry::KeyValue::new(
-                        SERVICE_VERSION,
-                        otel_params.service_version.clone(),
-                    ),
-                ])
-                .build();
-
-            if let Some(endpoint) = otel_params.endpoint_traces {
-                let exporter = opentelemetry_otlp::SpanExporter::builder()
-                    .with_http()
-                    .with_endpoint(endpoint)
-                    .build()?;
-                // Create a tracer provider with the exporter
-                let tracer_provider = opentelemetry_sdk::trace::SdkTracerProvider::builder()
-                    .with_batch_exporter(exporter)
-                    .with_resource(resource.clone())
-                    .build();
-                let tracer = tracer_provider.tracer(otel_params.service_name);
-                opentelemetry::global::set_tracer_provider(tracer_provider.clone());
-                layers.push(tracing_opentelemetry::layer().with_tracer(tracer).boxed());
-                guard.otel_tracer = Some(tracer_provider);
-            }
-
-            if let Some(endpoint) = otel_params.endpoint_metrics {
-                // Metrics
-                let exporter = opentelemetry_otlp::MetricExporter::builder()
-                    .with_http()
-                    .with_endpoint(endpoint)
-                    .build()?;
-                let meter_provider = SdkMeterProvider::builder()
-                    .with_resource(resource.clone())
-                    .with_periodic_exporter(exporter)
-                    .build();
-                opentelemetry::global::set_meter_provider(meter_provider.clone());
-                guard.otel_meter = Some(meter_provider);
-            }
-
-            if let Some(endpoint) = otel_params.endpoint_logs {
-                // Logs
-                let exporter = opentelemetry_otlp::LogExporter::builder()
-                    .with_http()
-                    .with_endpoint(endpoint)
-                    .build()?;
-                let log_provider = SdkLoggerProvider::builder()
-                    .with_resource(resource.clone())
-                    .with_batch_exporter(exporter)
-                    .build();
-                layers.push(
-                    opentelemetry_appender_tracing::layer::OpenTelemetryTracingBridge::new(
-                        &log_provider,
-                    )
-                    .boxed(),
-                );
-                guard.otel_logger = Some(log_provider);
+                let (guard, otel_layers) = build_otel_layers::<Registry>(otel)?;
+                tracing_guards.otel = guard;
+                layers.extend(otel_layers);
             }
         }
 
         tracing_subscriber::registry()
+            .with(layers)
             .with(
                 self.env_filter
                     .unwrap_or_else(|| EnvFilter::from_default_env()),
             )
-            .with(layers)
             .try_init()?;
 
-        Ok(guard)
+        Ok(tracing_guards)
     }
+}
+
+pub type GenericLayer<S> = dyn Layer<S> + Send + Sync;
+
+#[cfg(feature = "otel")]
+pub fn build_otel_layers<
+    S: tracing::Subscriber + for<'a> tracing_subscriber::registry::LookupSpan<'a> + Send + Sync,
+>(
+    params: OtelParams,
+) -> Result<(OtelGuards, Vec<Box<GenericLayer<S>>>), Box<dyn Error + Send + Sync>> {
+    use opentelemetry_semantic_conventions::resource::{SERVICE_NAME, SERVICE_VERSION};
+    opentelemetry::global::set_text_map_propagator(TraceContextPropagator::new());
+
+    let mut guards = OtelGuards::default();
+    let mut layers: Vec<Box<GenericLayer<S>>> = Vec::with_capacity(3);
+
+    // Trace
+    let resource = opentelemetry_sdk::Resource::builder()
+        .with_attributes(vec![
+            opentelemetry::KeyValue::new(SERVICE_NAME, params.service_name.clone()),
+            opentelemetry::KeyValue::new(SERVICE_VERSION, params.service_version.clone()),
+        ])
+        .build();
+
+    if let Some(endpoint) = params.endpoint_traces {
+        use tracing_subscriber::Layer;
+
+        let exporter = opentelemetry_otlp::SpanExporter::builder()
+            .with_http()
+            .with_endpoint(endpoint)
+            .build()?;
+        // Create a tracer provider with the exporter
+        let tracer_provider: SdkTracerProvider =
+            opentelemetry_sdk::trace::SdkTracerProvider::builder()
+                .with_batch_exporter(exporter)
+                .with_resource(resource.clone())
+                .build();
+        let tracer: opentelemetry_sdk::trace::Tracer = tracer_provider.tracer(params.service_name);
+        opentelemetry::global::set_tracer_provider(tracer_provider.clone());
+        layers.push(tracing_opentelemetry::layer().with_tracer(tracer).boxed());
+        guards.tracer = Some(tracer_provider);
+    }
+
+    if let Some(endpoint) = params.endpoint_metrics {
+        // Metrics
+        let exporter = opentelemetry_otlp::MetricExporter::builder()
+            .with_http()
+            .with_endpoint(endpoint)
+            .build()?;
+        let meter_provider: SdkMeterProvider = SdkMeterProvider::builder()
+            .with_resource(resource.clone())
+            .with_periodic_exporter(exporter)
+            .build();
+        opentelemetry::global::set_meter_provider(meter_provider.clone());
+        guards.meter = Some(meter_provider);
+    }
+
+    if let Some(endpoint) = params.endpoint_logs {
+        // Logs
+
+        use tracing_subscriber::Layer;
+        let exporter = opentelemetry_otlp::LogExporter::builder()
+            .with_http()
+            .with_endpoint(endpoint)
+            .build()?;
+        let log_provider: SdkLoggerProvider = SdkLoggerProvider::builder()
+            .with_resource(resource.clone())
+            .with_batch_exporter(exporter)
+            .build();
+        let a =
+            opentelemetry_appender_tracing::layer::OpenTelemetryTracingBridge::new(&log_provider)
+                .boxed();
+        layers.push(a);
+        guards.logger = Some(log_provider);
+    }
+
+    Ok((guards, layers))
 }
 
 #[cfg(feature = "otel")]
@@ -319,7 +344,7 @@ pub mod test {
             .with_json(Some(false))
             .with_rust_log("info")
             .with_otel_metric_export_interval("10000")
-            .with_otel(crate::TracingOtelParams {
+            .with_otel(crate::OtelParams {
                 endpoint_traces: Some("http://localhost:4318/v1/traces".into()),
                 endpoint_metrics: Some("http://localhost:4318/v1/metrics".into()),
                 endpoint_logs: Some("http://localhost:4318/v1/logs".into()),
@@ -366,7 +391,7 @@ pub mod test {
             .with_json(Some(false))
             .with_rust_log("info")
             .with_otel_metric_export_interval("10000")
-            .with_otel(crate::TracingOtelParams {
+            .with_otel(crate::OtelParams {
                 endpoint_traces: Some("http://localhost:4318/v1/traces".into()),
                 endpoint_metrics: Some("http://localhost:4318/v1/metrics".into()),
                 endpoint_logs: Some("http://localhost:4318/v1/logs".into()),

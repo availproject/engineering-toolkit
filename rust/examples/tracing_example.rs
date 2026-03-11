@@ -2,7 +2,7 @@
 // Run: cargo run --example tracing_example
 
 use internal_utils::HttpRequestMetrics;
-use internal_utils::{IntoOtelAttributes, TracingBuilder, TracingOtelParams, error, info, warn};
+use internal_utils::{IntoOtelAttributes, OtelParams, TracingBuilder, error, info, warn};
 use std::time::Duration;
 
 #[derive(Debug)]
@@ -257,7 +257,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         .with_rust_log("info")
         .with_json(Some(false))
         .with_otel_metric_export_interval("5000")
-        .with_otel(TracingOtelParams {
+        .with_otel(OtelParams {
             endpoint_traces: Some("http://localhost:4318/v1/traces".into()),
             endpoint_metrics: Some("http://localhost:4318/v1/metrics".into()),
             endpoint_logs: Some("http://localhost:4318/v1/logs".into()),
