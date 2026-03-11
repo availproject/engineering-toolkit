@@ -5,8 +5,8 @@ edition = "2024"
 
 [dependencies]
 tracing = { version = "0.1" }
-tracing-opentelemetry = { version = "0.32" }
-tracing-subscriber = { version =  "0.3", features = ["json", "env-filter"] }
+tracing-opentelemetry = { version = "0" }
+tracing-subscriber = { version =  "0", features = ["json", "env-filter"] }
 
 # Otel
 opentelemetry = { version = "0.31", optional = true }
