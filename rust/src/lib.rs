@@ -84,7 +84,7 @@ pub struct TracingGuards {
 }
 
 #[cfg(feature = "otel")]
-#[derive(Debug, Clone)]
+#[derive(Debug, Default, Clone)]
 pub struct OtelParams {
     pub endpoint_traces: Option<String>,
     pub endpoint_metrics: Option<String>,
@@ -94,14 +94,14 @@ pub struct OtelParams {
 }
 
 #[cfg(feature = "otel")]
-impl Default for OtelParams {
-    fn default() -> Self {
+impl OtelParams {
+    pub fn local(service_name: String, service_version: String) -> Self {
         Self {
             endpoint_traces: Some("http://localhost:4318/v1/traces".into()),
             endpoint_metrics: Some("http://localhost:4318/v1/metrics".into()),
             endpoint_logs: Some("http://localhost:4318/v1/logs".into()),
-            service_name: env!("CARGO_CRATE_NAME").into(),
-            service_version: env!("CARGO_PKG_VERSION").into(),
+            service_name,
+            service_version,
         }
     }
 }
