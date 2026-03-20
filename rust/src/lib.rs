@@ -91,6 +91,7 @@ pub struct OtelParams {
     pub endpoint_logs: Option<String>,
     pub service_name: String,
     pub service_version: String,
+    pub resource_attributes: Vec<opentelemetry::KeyValue>,
 }
 
 #[cfg(feature = "otel")]
@@ -102,6 +103,7 @@ impl OtelParams {
             endpoint_logs: Some("http://localhost:4318/v1/logs".into()),
             service_name,
             service_version,
+            resource_attributes: Vec::new(),
         }
     }
 }
@@ -248,11 +250,13 @@ pub fn build_otel_layers<
     let mut layers: Vec<Box<GenericLayer<S>>> = Vec::with_capacity(3);
 
     // Trace
+    let mut attributes = vec![
+        opentelemetry::KeyValue::new(SERVICE_NAME, params.service_name.clone()),
+        opentelemetry::KeyValue::new(SERVICE_VERSION, params.service_version.clone()),
+    ];
+    attributes.extend(params.resource_attributes.clone());
     let resource = opentelemetry_sdk::Resource::builder()
-        .with_attributes(vec![
-            opentelemetry::KeyValue::new(SERVICE_NAME, params.service_name.clone()),
-            opentelemetry::KeyValue::new(SERVICE_VERSION, params.service_version.clone()),
-        ])
+        .with_attributes(attributes)
         .build();
 
     if let Some(endpoint) = params.endpoint_traces {
@@ -350,6 +354,7 @@ pub mod test {
                 endpoint_logs: Some("http://localhost:4318/v1/logs".into()),
                 service_name: "markos-service".into(),
                 service_version: "0.12.0".into(),
+                ..Default::default()
             })
             .try_init()
             .unwrap();
@@ -397,6 +402,7 @@ pub mod test {
                 endpoint_logs: Some("http://localhost:4318/v1/logs".into()),
                 service_name: "markos-service".into(),
                 service_version: "0.12.0".into(),
+                ..Default::default()
             })
             .try_init()
             .unwrap();
