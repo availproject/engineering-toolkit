@@ -18,7 +18,7 @@ use opentelemetry_otlp::WithExportConfig;
 #[cfg(feature = "otel")]
 use opentelemetry_sdk::logs::SdkLoggerProvider;
 #[cfg(feature = "otel")]
-use opentelemetry_sdk::metrics::SdkMeterProvider;
+use opentelemetry_sdk::metrics::{SdkMeterProvider, Temporality};
 #[cfg(feature = "otel")]
 use opentelemetry_sdk::propagation::TraceContextPropagator;
 #[cfg(feature = "otel")]
@@ -283,6 +283,7 @@ pub fn build_otel_layers<
         let exporter = opentelemetry_otlp::MetricExporter::builder()
             .with_http()
             .with_endpoint(endpoint)
+            .with_temporality(Temporality::Delta)
             .build()?;
         let meter_provider: SdkMeterProvider = SdkMeterProvider::builder()
             .with_resource(resource.clone())
