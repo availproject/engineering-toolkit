@@ -18,7 +18,7 @@ use opentelemetry_otlp::WithExportConfig;
 #[cfg(feature = "otel")]
 use opentelemetry_sdk::logs::SdkLoggerProvider;
 #[cfg(feature = "otel")]
-use opentelemetry_sdk::metrics::{SdkMeterProvider, Temporality};
+use opentelemetry_sdk::metrics::SdkMeterProvider;
 #[cfg(feature = "otel")]
 use opentelemetry_sdk::propagation::TraceContextPropagator;
 #[cfg(feature = "otel")]
@@ -32,6 +32,8 @@ pub use opentelemetry_appender_tracing;
 pub use opentelemetry_otlp;
 #[cfg(feature = "otel")]
 pub use opentelemetry_sdk;
+#[cfg(feature = "otel")]
+pub use opentelemetry_sdk::metrics::Temporality;
 #[cfg(feature = "otel")]
 pub use opentelemetry_semantic_conventions;
 
@@ -84,7 +86,7 @@ pub struct TracingGuards {
 }
 
 #[cfg(feature = "otel")]
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Clone)]
 pub struct OtelParams {
     pub endpoint_traces: Option<String>,
     pub endpoint_metrics: Option<String>,
@@ -92,10 +94,14 @@ pub struct OtelParams {
     pub service_name: String,
     pub service_version: String,
     pub resource_attributes: Vec<opentelemetry::KeyValue>,
+    pub metric_temporality: Temporality,
 }
 
 #[cfg(feature = "otel")]
 impl OtelParams {
+    /// Defaults targeting the local SigNoz collector documented in
+    /// `rust/README.md`; metric temporality is `Delta` because that is what
+    /// SigNoz ingests. Construct `OtelParams` directly for other backends.
     pub fn local(service_name: String, service_version: String) -> Self {
         Self {
             endpoint_traces: Some("http://localhost:4318/v1/traces".into()),
@@ -104,6 +110,7 @@ impl OtelParams {
             service_name,
             service_version,
             resource_attributes: Vec::new(),
+            metric_temporality: Temporality::Delta,
         }
     }
 }
@@ -283,7 +290,7 @@ pub fn build_otel_layers<
         let exporter = opentelemetry_otlp::MetricExporter::builder()
             .with_http()
             .with_endpoint(endpoint)
-            .with_temporality(Temporality::Delta)
+            .with_temporality(params.metric_temporality)
             .build()?;
         let meter_provider: SdkMeterProvider = SdkMeterProvider::builder()
             .with_resource(resource.clone())
@@ -355,7 +362,8 @@ pub mod test {
                 endpoint_logs: Some("http://localhost:4318/v1/logs".into()),
                 service_name: "markos-service".into(),
                 service_version: "0.12.0".into(),
-                ..Default::default()
+                resource_attributes: Vec::new(),
+                metric_temporality: crate::Temporality::Delta,
             })
             .try_init()
             .unwrap();
@@ -403,7 +411,8 @@ pub mod test {
                 endpoint_logs: Some("http://localhost:4318/v1/logs".into()),
                 service_name: "markos-service".into(),
                 service_version: "0.12.0".into(),
-                ..Default::default()
+                resource_attributes: Vec::new(),
+                metric_temporality: crate::Temporality::Delta,
             })
             .try_init()
             .unwrap();
