@@ -31,7 +31,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let _guards = TracingBuilder::new()
         .with_rust_log("info")
         .with_json(Some(false))
-        .with_otel(OtelParams::default())
+        .with_otel(OtelParams::local("example".into(), "0.0.0".into()))
         .try_init()?;
 
     info!(service = "example", "service started");
@@ -59,10 +59,11 @@ Common builder methods:
 
 ### OtelParams
 
-`OtelParams` controls OTLP endpoints and service identity.
+`OtelParams` controls OTLP endpoints, service identity, resource
+attributes, and metric temporality.
 
 ```rust
-use internal_utils::OtelParams;
+use internal_utils::{OtelParams, Temporality};
 
 let params = OtelParams {
     endpoint_traces: Some("http://localhost:4318/v1/traces".into()),
@@ -70,6 +71,40 @@ let params = OtelParams {
     endpoint_logs: Some("http://localhost:4318/v1/logs".into()),
     service_name: "order-service".into(),
     service_version: "1.0.0".into(),
+    resource_attributes: Vec::new(),
+    metric_temporality: Temporality::Cumulative,
+};
+```
+
+`OtelParams::local(service_name, service_version)` provides defaults for
+the local SigNoz collector described in [Local OTLP Backend](#local-otlp-backend),
+including `Temporality::Delta`.
+
+### Metric Temporality
+
+OTLP metric exporters can report sums and histograms as **cumulative**
+running totals or **delta** windows. The right choice depends on the
+backend. The toolkit makes this a required parameter (no default) so the
+choice is explicit at every call site.
+
+| Backend         | Recommended temporality | Notes                                                                                |
+|-----------------|-------------------------|--------------------------------------------------------------------------------------|
+| Prometheus      | `Cumulative`            | Native model; OTLP spec default                                                      |
+| SigNoz          | `Delta`                 | Counters and standard histograms support both; exponential histograms are delta-only |
+
+```rust
+use internal_utils::{OtelParams, Temporality};
+
+// Prometheus-shaped backend
+let prom = OtelParams {
+    metric_temporality: Temporality::Cumulative,
+    ..OtelParams::local("svc".into(), "1.0.0".into())
+};
+
+// SigNoz / CloudWatch
+let signoz = OtelParams {
+    metric_temporality: Temporality::Delta,
+    ..OtelParams::local("svc".into(), "1.0.0".into())
 };
 ```
 

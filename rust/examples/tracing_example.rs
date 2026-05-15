@@ -2,7 +2,9 @@
 // Run: cargo run --example tracing_example
 
 use internal_utils::HttpRequestMetrics;
-use internal_utils::{IntoOtelAttributes, OtelParams, TracingBuilder, error, info, warn};
+use internal_utils::{
+    IntoOtelAttributes, OtelParams, Temporality, TracingBuilder, error, info, warn,
+};
 use std::time::Duration;
 
 #[derive(Debug)]
@@ -263,6 +265,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             endpoint_logs: Some("http://localhost:4318/v1/logs".into()),
             service_name: "order-service".into(),
             service_version: "1.0.0".into(),
+            resource_attributes: Vec::new(),
+            metric_temporality: Temporality::Delta,
         })
         .try_init()?;
 
